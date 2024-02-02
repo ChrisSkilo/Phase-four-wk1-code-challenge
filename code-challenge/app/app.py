@@ -73,45 +73,59 @@ class PowersByID(Resource):
             return response
     
     def patch(self,id):
-        power = Power.query.filter_by(id=id).first()
-        record_dict= power.to_dict() if power else None
-        
-        if record_dict== None:
-            error_dict=  {'error': 'Power not found'}
-            response= make_response(error_dict, 404)
+        data = request.get_json()
+        name = data.get("name")
+        description = data.get("description")
+        power_id = Power.query.get(id)
+        if not power_id:
+            error_dict=  { "error":  "power_id"}
+            response = make_response(jsonify(error_dict), 404)
             return response
         else:
-            for attr in request.form:
-                setattr(power, attr, request.form[attr])
+            power_id.name = name
+            power_id.description = description
+
+        
             
-            db.session.add(power)
-            try:
-                db.session.commit()
-                power_dict= power.to_dict()
-                response= make_response(power_dict, 200)
-                return response
-            except:
-                err_dict= {"errors" : ["validation errors"]}
-                response= make_response(err_dict, 404)
-                db.session.rollback()
-                return response         
+            db.session.commit()
+            response = make_response(jsonify(power_id.serialize()), 201)
+            return response
 
 api.add_resource(PowersByID, '/powers/<int:id>')
 
 class HeroPowers(Resource):
     def post(self):
-        new_record=  HeroPower(
-            strength= request.form['strength'],
-            power_id=  int(request.form['power_id']),
-            hero_id=   int(request.form['hero_id']),
-        )
-        db.session.add(new_record)
-        db.session.commit()
+        try:
+            
+            # Get Json  data and add to database
+            data= request.get_json()
+            strength= data.get('strength')
+            power_id= data.get('power_id')
+            hero_id= data.get('hero_id')
+            
+            power= Power.query.get(power_id)
+            hero=  Hero.query.get(hero_id)
+                
+            if not (power and hero):
+                error_dict=  { "error":  "Missing hero or power"}
+                response= make_response(jsonify(error_dict), 404)
+                return response
+            
+            new_record= HeroPower(strength=strength,  power_id=power_id, hero_id=hero_id)
+            
+            db.session.add(new_record)
+            db.session.commit()
+            
+            response_dict= new_record.to_dict()
+            
+            response= make_response(jsonify(response_dict), 201)
+            return response
         
-        response_dict= new_record.to_dict()
-        
-        response= make_response(jsonify(response_dict), 201)
-        return response
+        except:
+            error_dict={"errors": ["validation errors"]}
+            response = make_response(jsonify(error_dict), 400)
+            db.session.rollback ()
+            return response
     
 api.add_resource(HeroPowers, '/hero_powers')   
      
